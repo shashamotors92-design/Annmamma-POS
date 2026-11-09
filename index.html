@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnnMamma POS</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f5f3ef;color:#29251f}
+header{background:#38271f;color:white;padding:22px}
+header h1{margin:0;font-size:25px}
+header p{margin:6px 0 0;color:#ead8c8}
+main{padding:16px;max-width:900px;margin:auto}
+h2{font-size:20px}
+.menu{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.item{background:white;border:1px solid #e5ded6;border-radius:12px;padding:14px;text-align:left}
+.item strong{display:block;margin-bottom:8px}
+.item button,.checkout{background:#80543c;color:white;border:0;border-radius:8px;padding:10px;width:100%;font-weight:bold}
+.cart{background:white;padding:16px;border-radius:12px;margin-top:20px}
+.line{display:flex;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid #eee}
+.total{font-size:21px;font-weight:bold;margin:15px 0}
+.small{color:#777;font-size:13px}
+@media(min-width:650px){.menu{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<header>
+<h1>AnnMamma Café & Restaurant</h1>
+<p>Online Point of Sale System</p>
+</header>
+<main>
+<h2>Food & Beverages Menu</h2>
+<div class="menu" id="menu"></div>
+<section class="cart">
+<h2>Current Order</h2>
+<div id="cart">No items added yet.</div>
+<div class="total" id="total">Total: Rs. 0.00</div>
+<button class="checkout" onclick="checkout()">Complete Sale</button>
+<p class="small">First version – demonstration mode</p>
+</section>
+</main>
+<script>
+const products=[
+{name:"Chicken Fried Rice",price:1200},
+{name:"Egg Fried Rice",price:950},
+{name:"Chicken Kottu",price:1100},
+{name:"Egg Kottu",price:900},
+{name:"Chicken Burger",price:850},
+{name:"Sandwich",price:650},
+{name:"Pasta",price:1000},
+{name:"Fresh Juice",price:450},
+{name:"Iced Coffee",price:500}
+];
+let cart=[];
+const money=n=>"Rs. "+n.toLocaleString("en-US",{minimumFractionDigits:2});
+function renderMenu(){
+document.getElementById("menu").innerHTML=products.map((p,i)=>'<div class="item"><strong>'+p.name+'</strong><p>'+money(p.price)+'</p><button onclick="add('+i+')">Add to Order</button></div>').join("");
+}
+function add(i){cart.push(products[i]);renderCart();}
+function renderCart(){
+const el=document.getElementById("cart");
+if(!cart.length){el.textContent="No items added yet.";}
+else{el.innerHTML=cart.map((p,i)=>'<div class="line"><span>'+p.name+'</span><span>'+money(p.price)+' <button onclick="removeItem('+i+')">×</button></span></div>').join("");}
+document.getElementById("total").textContent="Total: "+money(cart.reduce((s,p)=>s+p.price,0));
+}
+function removeItem(i){cart.splice(i,1);renderCart();}
+function checkout(){
+if(!cart.length){alert("Please add items first.");return;}
+const total=cart.reduce((s,p)=>s+p.price,0);
+alert("Demo sale completed! Total: "+money(total)+". Database and receipt setup will be added next.");
+cart=[];renderCart();
+}
+renderMenu();
+</script>
+</body>
+</html>
