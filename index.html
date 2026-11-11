@@ -49,7 +49,7 @@
 /* AnnMamma dashboard food-photo menu cards */
 .items{grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:13px}
 .item{padding:0;overflow:hidden;min-height:0;border:1px solid #e3e7ed;border-radius:15px;background:#fff;box-shadow:0 3px 12px rgba(20,32,52,.07);transition:transform .18s,box-shadow .18s}
-.item:active{transform:scale(.98)}
+.item:active{transform:scale(.98)}.item:hover{box-shadow:0 7px 20px rgba(20,32,52,.13)}.item .food-photo{transition:transform .25s}.item:hover .food-photo{transform:scale(1.035)}
 .item .food-photo{display:block;width:100%;height:118px;object-fit:cover;background:#eee}
 .item .food-info{display:block;padding:11px 12px 13px}
 .item strong{font-size:14px;line-height:1.35;min-height:36px}
@@ -96,8 +96,34 @@ async function signIn(){if(!db){$("setup").textContent="Add your sb_publishable_
 async function startApp(){let {data,error}=await db.from("profiles").select("full_name,role").eq("id",user.id).single();if(error){alert("Profile error: "+error.message);await db.auth.signOut();return}staff=data;$("home").classList.add("hidden");$("login").classList.add("hidden");$("app").classList.remove("hidden");$("logout").classList.remove("hidden");$("welcome").textContent="Welcome"+(staff.full_name?" "+staff.full_name:"");$("role").textContent="CAFÉ & RESTAURANT · POS DASHBOARD";$("accountRole").textContent=(staff.role||"staff").toUpperCase();$("menuButton").classList.toggle("hidden",staff.role!=="owner");$("status").textContent="Connected · "+staff.role;await load()}
 async function load(){let [a,b,c]=await Promise.all([db.from("categories").select("id,name").order("name"),db.from("products").select("id,name,price,active,sort_order,category_id").eq("active",true).order("sort_order"),db.from("orders").select("id,order_no,subtotal,total,amount_paid,order_type,status,created_at").order("created_at",{ascending:false}).limit(100)]);let err=a.error||b.error||c.error;if(err){alert(err.message);return}cats=a.data||[];products=b.data||[];orders=c.data||[];renderCats();renderItems();renderCart();renderOrders();renderReports();$("product").innerHTML=products.map(p=>`<option value="${p.id}">${p.name}${p.price===null?" (Price missing)": " · "+money(p.price)}</option>`).join("")}
 function renderCats(){ $("categories").innerHTML="";["All",...cats.map(c=>c.name)].forEach(n=>{let b=document.createElement("button");b.textContent=n;b.className=n===category?"orange":"secondary";b.onclick=()=>{category=n;renderCats();renderItems()};$("categories").append(b)})}
-function foodPhotoFor(p){const c=(cats.find(c=>c.id===p.category_id)?.name||"").toLowerCase();const n=p.name.toLowerCase();if(/fried rice|rice/.test(n)||c.includes("rice"))return "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=700&q=80";if(/kottu/.test(n)||c.includes("kottu"))return "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=80";if(/pasta|noodle/.test(n)||c.includes("pasta")||c.includes("noodle"))return "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=700&q=80";if(/burger|sandwich|submarine/.test(n)||c.includes("burger")||c.includes("sandwich"))return "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=700&q=80";if(/juice|milkshake|coffee|tea|drink/.test(n)||c.includes("beverage"))return "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&w=700&q=80";if(/fries|nugget|snack|bite/.test(n)||c.includes("snack"))return "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=700&q=80";return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=700&q=80"}
-function renderItems(){let q=$("search").value.toLowerCase();$("items").innerHTML="";products.filter(p=>(category==="All"||cats.find(c=>c.id===p.category_id)?.name===category)&&p.name.toLowerCase().includes(q)).forEach(p=>{let b=document.createElement("button");b.className="item";b.disabled=p.price===null;let img=document.createElement("img");img.className="food-photo";img.src=foodPhotoFor(p);img.alt=p.name;img.loading="lazy";img.onerror=()=>{img.style.display="none"};let info=document.createElement("span");info.className="food-info";let n=document.createElement("strong");n.textContent=p.name;let v=document.createElement("span");v.className="food-price";v.textContent=p.price===null?"Price not set":money(p.price);info.append(n,v);b.append(img,info);b.onclick=()=>{let x=cart.find(x=>x.id===p.id);x?x.qty++:cart.push({id:p.id,name:p.name,price:Number(p.price),qty:1});renderCart()};$("items").append(b)})}
+function foodPhotoFor(p){
+  const n=(p.name||"").toLowerCase();
+  const c=(cats.find(c=>c.id===p.category_id)?.name||"").toLowerCase();
+  const photo=(id)=>`https://images.unsplash.com/${id}?auto=format&fit=crop&w=700&q=85`;
+  const choices=[
+    [/fried rice|rice/, "photo-1512058564366-18510be2db19"],
+    [/kottu/, "photo-1547592180-85f173990554"],
+    [/omelette|egg/, "photo-1525351484163-7529414344d8"],
+    [/noodle/, "photo-1569718212165-3a8278d5f624"],
+    [/pasta|macaroni|spaghetti/, "photo-1473093295043-cdd812d0e601"],
+    [/burger/, "photo-1568901346375-23c9450c58cd"],
+    [/submarine|submarin/, "photo-1528735602780-2552fd46c7af"],
+    [/sandwich|toast/, "photo-1528735602780-2552fd46c7af"],
+    [/fries|chips/, "photo-1573080496219-bb080dd4f877"],
+    [/pizza/, "photo-pizza"],
+    [/chicken curry|curry|devilled/, "photo-1603894584373-5ac82b2ae398"],
+    [/fish|prawn|seafood/, "photo-1519708227418-c8fd9a32b7a2"],
+    [/juice|milkshake|coffee|tea|drink/, "photo-1544145945-f90425340c7e"],
+    [/salad|vegetable/, "photo-1512621776951-a57141f2e0b"],
+    [/cake|dessert|pudding/, "photo-1578985545062-69928b1d9587"]
+  ];
+  for(const [re,id] of choices){if(re.test(n))return photo(id);}
+  if(c.includes("burger"))return photo("photo-1568901346375-23c9450c58cd");
+  if(c.includes("pasta")||c.includes("noodle"))return photo("photo-1473093295043-cdd812d0e601");
+  if(c.includes("fried rice")||c.includes("rice"))return photo("photo-1512058564366-18510be2db19");
+  if(c.includes("beverage")||c.includes("drink"))return photo("photo-1544145945-f90425340c7e");
+  return photo("photo-1546069901-ba9599a7e63c");
+} function renderItems(){let q=$("search").value.toLowerCase();$("items").innerHTML="";products.filter(p=>(category==="All"||cats.find(c=>c.id===p.category_id)?.name===category)&&p.name.toLowerCase().includes(q)).forEach(p=>{let b=document.createElement("button");b.className="item";b.disabled=p.price===null;let img=document.createElement("img");img.className="food-photo";img.src=foodPhotoFor(p);img.alt=p.name;img.loading="lazy";img.onerror=()=>{img.style.display="none"};let info=document.createElement("span");info.className="food-info";let n=document.createElement("strong");n.textContent=p.name;let v=document.createElement("span");v.className="food-price";v.textContent=p.price===null?"Price not set":money(p.price);info.append(n,v);b.append(img,info);b.onclick=()=>{let x=cart.find(x=>x.id===p.id);x?x.qty++:cart.push({id:p.id,name:p.name,price:Number(p.price),qty:1});renderCart()};$("items").append(b)})}
 function renderCart(){$("cart").innerHTML="";cart.forEach((x,i)=>{let d=document.createElement("div");d.className="cart-row";let name=document.createElement("span");name.textContent=x.name+" · "+money(x.price);let controls=document.createElement("div");controls.className="qty";[["−",-1],[""+x.qty,0],["+",1],["×",-99]].forEach(([t,n])=>{let b=document.createElement("button");b.textContent=t;b.className=n===0?"secondary":"";b.onclick=()=>{if(n===-99)cart.splice(i,1);else if(n!==0){x.qty+=n;if(x.qty<1)cart.splice(i,1)}renderCart()};controls.append(b)});d.append(name,controls);$("cart").append(d)});let subtotal=cart.reduce((s,x)=>s+x.price*x.qty,0);let serviceCharge=$("type").value==="dine_in"?subtotal*0.10:0;$("subtotal").textContent=money(subtotal);$("serviceCharge").textContent=money(serviceCharge);$("serviceRow").classList.toggle("hidden",$("type").value!=="dine_in");$("total").textContent=money(subtotal+serviceCharge)}
 function renderOrders(){$("orderrows").innerHTML="";orders.forEach(o=>{let tr=document.createElement("tr");[o.order_no,new Date(o.created_at).toLocaleString(),money(o.total),o.order_type].forEach(v=>{let td=document.createElement("td");td.textContent=v;tr.append(td)});let td=document.createElement("td"),btn=document.createElement("button");btn.textContent="Reprint Receipt";btn.className="secondary";btn.onclick=()=>reprintOrder(o,btn);td.append(btn);tr.append(td);$("orderrows").append(tr)})}
 function renderReports(){let today=orders.filter(o=>new Date(o.created_at).toDateString()===new Date().toDateString()&&o.status==="completed");$("count").textContent=today.length;$("sales").textContent=money(today.reduce((s,o)=>s+Number(o.total),0))}
