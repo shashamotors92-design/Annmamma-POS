@@ -97,30 +97,32 @@ async function startApp(){let {data,error}=await db.from("profiles").select("ful
 async function load(){let [a,b,c]=await Promise.all([db.from("categories").select("id,name").order("name"),db.from("products").select("id,name,price,active,sort_order,category_id").eq("active",true).order("sort_order"),db.from("orders").select("id,order_no,subtotal,total,amount_paid,order_type,status,created_at").order("created_at",{ascending:false}).limit(100)]);let err=a.error||b.error||c.error;if(err){alert(err.message);return}cats=a.data||[];products=b.data||[];orders=c.data||[];renderCats();renderItems();renderCart();renderOrders();renderReports();$("product").innerHTML=products.map(p=>`<option value="${p.id}">${p.name}${p.price===null?" (Price missing)": " · "+money(p.price)}</option>`).join("")}
 function renderCats(){ $("categories").innerHTML="";["All",...cats.map(c=>c.name)].forEach(n=>{let b=document.createElement("button");b.textContent=n;b.className=n===category?"orange":"secondary";b.onclick=()=>{category=n;renderCats();renderItems()};$("categories").append(b)})}
 function foodPhotoFor(p){
-  // Build a dish-specific image search URL so different menu names do not
-  // all reuse one broad category photograph. Images are illustrative.
-  const name=(p.name||"").trim();
-  const n=name.toLowerCase();
-  const categoryName=(cats.find(c=>c.id===p.category_id)?.name||"").toLowerCase();
-  const terms={
-    "fried rice":"fried rice asian food", "nasi goreng":"nasi goreng fried rice",
-    "kottu":"sri lankan kottu roti", "submarine":"submarine sandwich hoagie",
-    "burger":"hamburger burger", "sandwich":"grilled sandwich", "toast":"cheese toast",
-    "noodles":"asian noodles", "pasta":"pasta dish", "omelette":"omelette eggs",
-    "curry":"curry bowl", "devilled":"sri lankan devilled food", "sweet & sour":"sweet sour chicken food",
-    "sweet and sour":"sweet sour chicken food", "prawn":"prawn seafood dish", "seafood":"seafood dish",
-    "fries":"french fries", "juice":"fresh fruit juice", "milkshake":"milkshake drink",
-    "coffee":"coffee cup", "tea":"tea drink", "salad":"fresh salad", "cake":"cake dessert",
-    "dessert":"dessert", "rice":"fried rice dish", "chicken":"chicken dish", "beef":"beef dish", "fish":"fish dish"
+  // Curated, stable food photos. Do not use random search-image services:
+  // those can return unrelated dishes (for example, sandwiches for submarines).
+  const n=(p.name||"").toLowerCase();
+  const cat=(cats.find(c=>c.id===p.category_id)?.name||"").toLowerCase();
+  const photos={
+    kottu:"https://cdn.pixabay.com/photo/2021/06/08/01/27/kottu-6319358_1280.jpg",
+    submarine:"https://cdn.pixabay.com/photo/2015/04/01/18/28/submarine-sandwich-702802_1280.jpg",
+    burger:"https://cdn.pixabay.com/photo/2019/04/24/12/11/burger-4152013_1280.jpg",
+    sandwich:"https://cdn.pixabay.com/photo/2014/09/18/21/17/sandwich-451403_1280.jpg"
   };
-  let key="food dish";
-  // Prefer the full dish name as the search phrase, retaining a food-style hint.
-  let hint=Object.keys(terms).find(k=>n.includes(k));
-  if(hint)key=terms[hint];
-  else if(categoryName)key=categoryName+" food";
-  const query=(name+" "+key+" plated food").replace(/[^a-z0-9 ]/gi," ").trim().replace(/\s+/g,"+");
-  // Dish-specific query plus stable seed reduces identical results for similar dishes.
-  const seed=[...name].reduce((a,ch)=>((a*31)+ch.charCodeAt(0))>>>0,7);
+  // Match the most specific food name first; submarine must never fall through to sandwich.
+  if(n.includes("submarine")) return photos.submarine;
+  if(n.includes("kottu")) return photos.kottu;
+  if(n.includes("burger")) return photos.burger;
+  if(n.includes("sandwich")||n.includes("toast")) return photos.sandwich;
+  // For the remaining menu types, request a narrowly targeted food image.
+  const hints=[
+    ["fried rice","fried rice"],["nasi goreng","nasi goreng"],["noodle","asian noodles"],
+    ["pasta","pasta dish"],["omelette","omelette"],["curry","curry bowl"],
+    ["prawn","prawn dish"],["seafood","seafood dish"],["fries","french fries"],
+    ["devilled","sri lankan devilled dish"],["sweet & sour","sweet and sour chicken"],
+    ["chicken","chicken dish"],["beef","beef dish"],["fish","fish dish"]
+  ];
+  const hint=hints.find(([key])=>n.includes(key))?.[1]||cat+" food"||"food dish";
+  const query=(p.name+" "+hint+" plated food").replace(/[^a-z0-9 ]/gi," ").trim().replace(/\s+/g,"+");
+  const seed=[...n].reduce((a,ch)=>((a*31)+ch.charCodeAt(0))>>>0,7);
   return `https://loremflickr.com/700/450/${query}?lock=${seed}`;
 } function renderItems(){let q=$("search").value.toLowerCase();$("items").innerHTML="";products.filter(p=>(category==="All"||cats.find(c=>c.id===p.category_id)?.name===category)&&p.name.toLowerCase().includes(q)).forEach(p=>{let b=document.createElement("button");b.className="item";b.disabled=p.price===null;let img=document.createElement("img");img.className="food-photo";img.src=foodPhotoFor(p);img.alt=p.name;img.loading="lazy";img.onerror=()=>{img.style.display="none"};let info=document.createElement("span");info.className="food-info";let n=document.createElement("strong");n.textContent=p.name;let v=document.createElement("span");v.className="food-price";v.textContent=p.price===null?"Price not set":money(p.price);info.append(n,v);b.append(img,info);b.onclick=()=>{let x=cart.find(x=>x.id===p.id);x?x.qty++:cart.push({id:p.id,name:p.name,price:Number(p.price),qty:1});renderCart()};$("items").append(b)})}
 function renderCart(){$("cart").innerHTML="";cart.forEach((x,i)=>{let d=document.createElement("div");d.className="cart-row";let name=document.createElement("span");name.textContent=x.name+" · "+money(x.price);let controls=document.createElement("div");controls.className="qty";[["−",-1],[""+x.qty,0],["+",1],["×",-99]].forEach(([t,n])=>{let b=document.createElement("button");b.textContent=t;b.className=n===0?"secondary":"";b.onclick=()=>{if(n===-99)cart.splice(i,1);else if(n!==0){x.qty+=n;if(x.qty<1)cart.splice(i,1)}renderCart()};controls.append(b)});d.append(name,controls);$("cart").append(d)});let subtotal=cart.reduce((s,x)=>s+x.price*x.qty,0);let serviceCharge=$("type").value==="dine_in"?subtotal*0.10:0;$("subtotal").textContent=money(subtotal);$("serviceCharge").textContent=money(serviceCharge);$("serviceRow").classList.toggle("hidden",$("type").value!=="dine_in");$("total").textContent=money(subtotal+serviceCharge)}
