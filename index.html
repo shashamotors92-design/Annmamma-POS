@@ -188,7 +188,7 @@ function makeReceipt(no,subtotal,serviceCharge,total,paid,items,receiptDate,tabl
   items.forEach(item=>{let row=document.createElement("div");row.className="receipt-items";let itemMoney=n=>Number(n||0).toLocaleString("en-LK",{minimumFractionDigits:2,maximumFractionDigits:2});let vals=[item.name,String(item.qty),itemMoney(item.price),itemMoney(item.price*item.qty)];vals.forEach((v,i)=>{let x=document.createElement("span");x.textContent=v;if(i===0)x.className="receipt-item-name";row.append(x)});r.append(row)});
   r.append(document.createElement("hr"));
   let totalLine=(a,b,cls="")=>{let d=document.createElement("div");d.className="rline receipt-total-line "+cls;let x=document.createElement("span"),y=document.createElement("span");x.textContent=a;y.textContent=b;d.append(x,y);r.append(d)};
-  totalLine("Subtotal",money(subtotal));totalLine("Total",money(total),"receipt-grand-total");totalLine("Paid",money(paid));totalLine("Change",money(paid-total));
+  totalLine("Subtotal",money(subtotal));totalLine("Service Charge",money(serviceCharge));totalLine("Total",money(total),"receipt-grand-total");
   r.append(document.createElement("hr"));let footer=document.createElement("div");footer.className="receipt-footer";footer.innerHTML="<div class='receipt-thanks'>Thank You!</div><div>Come Again!</div><div class='receipt-heart'>♥</div>";r.append(footer)
 }
 async function reprintOrder(o,btn){
