@@ -157,7 +157,17 @@ async function load(){let [a,b,c]=await Promise.all([db.from("categories").selec
   }
   products=b.data||[];orders=c.data||[];renderCats();renderItems();renderCart();renderOrders();renderReports();$("product").innerHTML=products.map(p=>`<option value="${p.id}">${p.name}${isDrinkProduct(p)?" · Dine In "+money(p.dine_in_price)+" / Takeaway "+money(p.takeaway_price):(p.price===null?" (Price missing)":" · "+money(p.price))}</option>`).join("");$("newProductCategory").innerHTML=cats.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");syncNewProductPriceFields();syncMenuEditor()}
 function renderCats(){ $("categories").innerHTML="";["All",...cats.map(c=>c.name)].forEach(n=>{let b=document.createElement("button");b.textContent=n;b.className=n===category?"orange":"secondary";b.onclick=()=>{category=n;renderCats();renderItems()};$("categories").append(b)})}
-function foodPhotoFor(p){return p.image_url||"";} function isDrinkCategoryName(name){return (name||"").trim().toLowerCase().replace(/&/g,"and").replace(/\\s+/g," ")==="drinks and beverages";}
+function normalizeCategoryName(name){
+  return String(name||"").normalize("NFKC").trim().toLowerCase()
+    .replace(/&/g," and ")
+    .replace(/[^\\p{L}\\p{N}]+/gu," ")
+    .replace(/\\s+/g," ").trim();
+}
+function isDrinkCategoryName(name){
+  const n=normalizeCategoryName(name);
+  return ["drink and beverage","drinks and beverage","drink and beverages","drinks and beverages"].includes(n);
+}
+function foodPhotoFor(p){return p.image_url||"";}
 function isDrinkProduct(p){return isDrinkCategoryName(cats.find(c=>c.id===p.category_id)?.name||"");} function renderItems(){let q=$("search").value.toLowerCase();$("items").innerHTML="";products.filter(p=>(category==="All"||cats.find(c=>c.id===p.category_id)?.name===category)&&p.name.toLowerCase().includes(q)).forEach(p=>{let drink=isDrinkProduct(p),type=$("type").value,chosen=drink?(type==="dine_in"?p.dine_in_price:p.takeaway_price):p.price;let b=document.createElement("button");b.className="item";b.disabled=!drink&&(p.price===null);let info=document.createElement("span");info.className="food-info";if(p.image_url){let img=document.createElement("img");img.className="food-photo";img.src=p.image_url;img.alt=p.name;img.loading="lazy";img.onerror=()=>{img.replaceWith(makePhotoPlaceholder())};b.append(img)}else{b.append(makePhotoPlaceholder())}let n=document.createElement("strong");n.textContent=p.name;let v=document.createElement("span");v.className="food-price";v.textContent=drink?(chosen===null||chosen===undefined?"Set price in order":money(chosen)):money(p.price);info.append(n,v);b.append(info);b.onclick=()=>{let x=cart.find(x=>x.id===p.id);if(x){x.qty++}else{cart.push({id:p.id,name:p.name,price:Number(chosen)||0,qty:1,priceEditable:drink,manualPrice:false,defaultPrice:Number(chosen)||0,dineInPrice:p.dine_in_price,takeawayPrice:p.takeaway_price})}renderCart()};$("items").append(b)})} function makePhotoPlaceholder(){let d=document.createElement("div");d.className="food-placeholder";d.textContent="Upload food photo";return d}
 function renderCart(){$("cart").innerHTML="";cart.forEach((x,i)=>{let d=document.createElement("div");d.className="cart-row";let name=document.createElement("span");if(x.priceEditable){let title=document.createElement("div");title.textContent=x.name;let wrap=document.createElement("div");wrap.className="cart-price-wrap";let label=document.createElement("span");label.className="cart-price-label";label.textContent="Sale price (LKR)";let input=document.createElement("input");input.className="cart-price-edit";input.type="number";input.min="0.01";input.step="0.01";input.value=x.price?String(x.price):"";input.placeholder="Enter price";input.setAttribute("aria-label","Sale price for "+x.name);input.onchange=()=>{let v=Number(input.value);if(!Number.isFinite(v)||v<=0){alert("Enter a valid sale price for "+x.name);input.value=x.price?String(x.price):"";return}x.price=v;x.manualPrice=true;renderCart()};wrap.append(label,input);name.append(title,wrap)}else{name.textContent=x.name+" · "+money(x.price)}let controls=document.createElement("div");controls.className="qty";[["−",-1],[""+x.qty,0],["+",1],["×",-99]].forEach(([t,n])=>{let b=document.createElement("button");b.textContent=t;b.className=n===0?"secondary":"";b.onclick=()=>{if(n===-99)cart.splice(i,1);else if(n!==0){x.qty+=n;if(x.qty<1)cart.splice(i,1)}renderCart()};controls.append(b)});d.append(name,controls);$("cart").append(d)});let subtotal=cart.reduce((s,x)=>s+x.price*x.qty,0);let serviceCharge=$("type").value==="dine_in"?subtotal*0.10:0;$("subtotal").textContent=money(subtotal);$("serviceCharge").textContent=money(serviceCharge);$("serviceRow").classList.toggle("hidden",$("type").value!=="dine_in");$("total").textContent=money(subtotal+serviceCharge)}
 function renderOrders(){$("orderrows").innerHTML="";orders.forEach(o=>{let tr=document.createElement("tr");[o.order_no,new Date(o.created_at).toLocaleString(),money(o.total),o.order_type].forEach(v=>{let td=document.createElement("td");td.textContent=v;tr.append(td)});let td=document.createElement("td"),btn=document.createElement("button");btn.textContent="Reprint Receipt";btn.className="secondary";btn.onclick=()=>reprintOrder(o,btn);td.append(btn);tr.append(td);$("orderrows").append(tr)})}
@@ -216,7 +226,45 @@ async function reprintOrder(o,btn){
   }catch(e){alert("Could not reprint receipt: "+e.message)}
   finally{btn.disabled=false;btn.textContent=previous}
 }
-async function addCategory(){if(staff?.role!=="owner"){alert("Owner access only.");return}let name=$("newCategoryName").value.trim();if(!name){$("menumsg").textContent="Enter a category name.";return}if(cats.some(c=>c.name.toLowerCase()===name.toLowerCase())){$("menumsg").textContent="This category already exists.";return}$("addCategory").disabled=true;try{let {data,error}=await db.from("categories").insert({name}).select("id,name").single();if(error)throw error;$("newCategoryName").value="";await load();if(data?.id){$("newProductCategory").value=data.id;category=data.name;renderCats();renderItems()}$("menumsg").textContent="Category added successfully."}catch(e){$("menumsg").textContent="Could not add category: "+e.message}finally{$("addCategory").disabled=false}}
+async function addCategory(){
+  if(staff?.role!=="owner"){alert("Owner access only.");return}
+  const typedName=$("newCategoryName").value.trim();
+  if(!typedName){$("menumsg").textContent="Enter a category name.";return}
+  // Use one consistent category label for common singular/plural drink names.
+  const name=isDrinkCategoryName(typedName)?"Drinks & Beverages":typedName;
+  const existing=cats.find(c=>normalizeCategoryName(c.name)===normalizeCategoryName(name) ||
+    (isDrinkCategoryName(name)&&isDrinkCategoryName(c.name)));
+  if(existing){
+    $("newProductCategory").value=existing.id;
+    $("newCategoryName").value="";
+    syncNewProductPriceFields();
+    $("menumsg").textContent="This category already exists. It has been selected.";
+    return;
+  }
+  $("addCategory").disabled=true;
+  $("menumsg").textContent="Adding category...";
+  try{
+    const {data,error}=await db.from("categories").insert({name}).select("id,name").single();
+    if(error)throw error;
+    $("newCategoryName").value="";
+    await load();
+    const saved=cats.find(c=>c.id===data?.id) || cats.find(c=>normalizeCategoryName(c.name)===normalizeCategoryName(name));
+    if(saved){
+      $("newProductCategory").value=saved.id;
+      category=saved.name;
+      renderCats();
+      renderItems();
+      syncNewProductPriceFields();
+    }
+    $("menumsg").textContent="Category added successfully: "+(saved?.name||name);
+  }catch(e){
+    const msg=e?.message||String(e);
+    $("menumsg").textContent="Could not add category: "+msg+
+      ( /row-level security|permission denied|not allowed/i.test(msg)
+        ? " — Supabase category INSERT permission is blocking this action. The database policy must be fixed."
+        : "");
+  }finally{$("addCategory").disabled=false}
+}
 async function addProduct(){if(staff?.role!=="owner"){alert("Owner access only.");return}let name=$("newProductName").value.trim(),categoryId=$("newProductCategory").value,priceText=$("newProductPrice").value,price=Number(priceText),selectedCategory=cats.find(c=>c.id===categoryId),isDrink=isDrinkCategoryName(selectedCategory?.name);let dineText=$("newDrinkDinePrice").value,takeText=$("newDrinkTakePrice").value,dine=dineText===""?null:Number(dineText),take=takeText===""?null:Number(takeText);if(!name){$("menumsg").textContent="Enter the food or drink name.";return}if(!categoryId){$("menumsg").textContent="Please select a category.";return}if(isDrink?((dineText!==""&&(!Number.isFinite(dine)||dine<=0))||(takeText!==""&&(!Number.isFinite(take)||take<=0))):(priceText===""||!Number.isFinite(price)||price<0)){ $("menumsg").textContent=isDrink?"Enter valid Dine In and/or Takeaway prices. You can set the missing price during the sale.":"Enter a valid price in LKR.";return}let nextSort=(products.reduce((m,p)=>Math.max(m,Number(p.sort_order)||0),0)+1);$("addProduct").disabled=true;$("menumsg").textContent="Adding new menu item...";try{let payload={name,category_id:categoryId,price:isDrink?null:price,dine_in_price:isDrink?dine:null,takeaway_price:isDrink?take:null,active:true,sort_order:nextSort};let {data,error}=await db.from("products").insert(payload).select("id").single();if(error)throw error;$("newProductName").value="";$("newProductPrice").value="";$("newDrinkDinePrice").value="";$("newDrinkTakePrice").value="";await load();if(data?.id){$("product").value=data.id;syncMenuEditor()}$("menumsg").textContent="New menu item added successfully."}catch(e){$("menumsg").textContent="Could not add menu item: "+e.message}finally{$("addProduct").disabled=false}}
 function syncNewProductPriceFields(){let drink=isDrinkCategoryName(cats.find(c=>c.id===$("newProductCategory").value)?.name||"");$("drinkPriceFields").classList.toggle("hidden",!drink);$("standardPriceFields").classList.toggle("hidden",drink)}
 function syncMenuEditor(){if(staff?.role!=="owner")return;let p=products.find(x=>x.id===$("product").value)||products[0];if(!p)return;$("product").value=p.id;let drink=isDrinkProduct(p);$("standardEditPrice").classList.toggle("hidden",drink);$("drinkEditPrices").classList.toggle("hidden",!drink);$("price").value=p.price??"";$("editDrinkDinePrice").value=p.dine_in_price??"";$("editDrinkTakePrice").value=p.takeaway_price??"";$("photoCurrent").textContent=p.image_url?"Photo uploaded. Preview: "+p.name:"No photo uploaded for this item yet.";$("photoFile").value="";}
