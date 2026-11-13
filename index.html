@@ -78,27 +78,35 @@
 .item:disabled span.food-price{color:#9b7650}
 @media(max-width:560px){.items{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.item .food-photo{height:105px}.item .food-info{padding:9px}.item strong{font-size:13px;min-height:34px}.item span.food-price{font-size:14px}}
 
-/* Desktop billing layout: scroll only the menu panel; keep Current Order in view */
+/* Desktop billing layout: wider menu, compact Current Order, menu-only scrolling */
 @media (min-width:701px){
   #billing .layout{
+    grid-template-columns:minmax(0,1.8fr) minmax(300px,.9fr);
+    gap:16px;
     align-items:start;
   }
   #billing .layout > .panel:first-child{
-    height:calc(100vh - 390px);
-    min-height:300px;
-    max-height:560px;
+    height:calc(100vh - 260px);
+    min-height:380px;
+    max-height:680px;
     overflow-y:auto;
     overflow-x:hidden;
     overscroll-behavior:contain;
     position:sticky;
-    top:160px;
+    top:150px;
     scrollbar-gutter:stable;
   }
   #billing .layout > .panel:last-child{
     position:sticky;
-    top:160px;
+    top:150px;
     align-self:start;
+    min-width:0;
+    padding:13px;
     overflow:visible;
+  }
+  #billing .layout > .panel:last-child h2{
+    font-size:17px;
+    margin-bottom:10px;
   }
 }
 
