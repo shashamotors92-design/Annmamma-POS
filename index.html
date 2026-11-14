@@ -147,7 +147,7 @@ const $=id=>document.getElementById(id);let user,staff,cats=[],products=[],cart=
 const money=n=>"LKR "+Number(n||0).toLocaleString("en-LK",{minimumFractionDigits:2,maximumFractionDigits:2});
 async function signIn(){if(!db){$("setup").textContent="Add your sb_publishable_ key in SUPABASE_PUBLISHABLE_KEY in this file, then reopen it.";return}let {data,error}=await db.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});if(error){$("loginmsg").textContent=error.message;return}user=data.user;await startApp()}
 async function startApp(){let {data,error}=await db.from("profiles").select("full_name,role").eq("id",user.id).single();if(error){alert("Profile error: "+error.message);await db.auth.signOut();return}staff=data;$("home").classList.add("hidden");$("login").classList.add("hidden");$("app").classList.remove("hidden");$("logout").classList.remove("hidden");$("welcome").textContent="Welcome"+(staff.full_name?" "+staff.full_name:"");$("role").textContent="CAFÉ & RESTAURANT · POS DASHBOARD";$("accountRole").textContent=(staff.role||"staff").toUpperCase();$("menuButton").classList.toggle("hidden",staff.role!=="owner");$("status").textContent="Connected · "+staff.role;await load()}
-async function load(){let [a,b,c]=await Promise.all([db.from("categories").select("id,name").order("name"),db.from("products").select("id,name,price,dine_in_price,takeaway_price,active,sort_order,category_id,image_url").eq("active",true).order("sort_order"),db.from("orders").select("id,order_no,subtotal,total,amount_paid,order_type,status,created_at,table_label").order("created_at",{ascending:false}).limit(100)]);let err=a.error||b.error||c.error;if(err){alert(err.message);return}cats=a.data||[];
+async function load(){let [a,b,c]=await Promise.all([db.from("categories").select("id,name").order("name"),db.from("products").select("id,name,price,dine_in_price,takeaway_price,active,sort_order,category_id,image_url").eq("active",true).order("sort_order"),db.from("orders").select("id,order_no,subtotal,total,amount_paid,order_type,status,created_at,table_label").order("created_at",{ascending:false}).limit(100)]);let err=a.error||b.error||c.error;if(err){alert(err.message);return}cats=(a.data||[]).map(x=>({...x,name:displayCategoryName(x.name)}));
   // Ensure the Drinks & Beverages category exists in the shared database.
   // This runs for the owner only, so staff accounts never attempt category creation.
   if(staff?.role==="owner" && !cats.some(x=>isDrinkCategoryName(x.name))){
@@ -160,12 +160,16 @@ function renderCats(){ $("categories").innerHTML="";["All",...cats.map(c=>c.name
 function normalizeCategoryName(name){
   return String(name||"").normalize("NFKC").trim().toLowerCase()
     .replace(/&/g," and ")
-    .replace(/[^\\p{L}\\p{N}]+/gu," ")
-    .replace(/\\s+/g," ").trim();
+    .replace(/[^\p{L}\p{N}]+/gu," ")
+    .replace(/\s+/g," ").trim();
 }
 function isDrinkCategoryName(name){
   const n=normalizeCategoryName(name);
-  return ["drink and beverage","drinks and beverage","drink and beverages","drinks and beverages"].includes(n);
+  // Treat common existing labels as the same Drinks & Beverages category.
+  return /\b(drink|drinks|beverage|beverages)\b/.test(n);
+}
+function displayCategoryName(name){
+  return isDrinkCategoryName(name) ? "Drinks & Beverages" : name;
 }
 function foodPhotoFor(p){return p.image_url||"";}
 function isDrinkProduct(p){return isDrinkCategoryName(cats.find(c=>c.id===p.category_id)?.name||"");} function renderItems(){let q=$("search").value.toLowerCase();$("items").innerHTML="";products.filter(p=>(category==="All"||cats.find(c=>c.id===p.category_id)?.name===category)&&p.name.toLowerCase().includes(q)).forEach(p=>{let drink=isDrinkProduct(p),type=$("type").value,chosen=drink?(type==="dine_in"?p.dine_in_price:p.takeaway_price):p.price;let b=document.createElement("button");b.className="item";b.disabled=!drink&&(p.price===null);let info=document.createElement("span");info.className="food-info";if(p.image_url){let img=document.createElement("img");img.className="food-photo";img.src=p.image_url;img.alt=p.name;img.loading="lazy";img.onerror=()=>{img.replaceWith(makePhotoPlaceholder())};b.append(img)}else{b.append(makePhotoPlaceholder())}let n=document.createElement("strong");n.textContent=p.name;let v=document.createElement("span");v.className="food-price";v.textContent=drink?(chosen===null||chosen===undefined?"Set price in order":money(chosen)):money(p.price);info.append(n,v);b.append(info);b.onclick=()=>{let x=cart.find(x=>x.id===p.id);if(x){x.qty++}else{cart.push({id:p.id,name:p.name,price:Number(chosen)||0,qty:1,priceEditable:drink,manualPrice:false,defaultPrice:Number(chosen)||0,dineInPrice:p.dine_in_price,takeawayPrice:p.takeaway_price})}renderCart()};$("items").append(b)})} function makePhotoPlaceholder(){let d=document.createElement("div");d.className="food-placeholder";d.textContent="Upload food photo";return d}
@@ -238,7 +242,7 @@ async function addCategory(){
     $("newProductCategory").value=existing.id;
     $("newCategoryName").value="";
     syncNewProductPriceFields();
-    $("menumsg").textContent="This category already exists. It has been selected.";
+    $("menumsg").textContent="Drinks & Beverages already exists. It is selected for the new menu item.";
     return;
   }
   $("addCategory").disabled=true;
