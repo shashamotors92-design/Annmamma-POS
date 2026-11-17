@@ -209,7 +209,7 @@ async function deleteBeverageItem(id){
   if(staff?.role!=="owner"){alert("Owner access only.");return}
   const item=beverageItems.find(x=>x.id===id);
   if(!item)return;
-  const confirmed=confirm("PERMANENTLY DELETE BEVERAGE STOCK TYPE\\n\\nDelete '"+item.name+(item.bottle_size?" · "+item.bottle_size:"")+"'? This cannot be undone.\\n\\nIf stock-in or usage history exists, the database may block deletion to protect that history.");
+  const confirmed=confirm("PERMANENTLY DELETE BEVERAGE STOCK TYPE\n\nDelete '"+item.name+(item.bottle_size?" · "+item.bottle_size:"")+"'? This cannot be undone.\n\nIf stock-in or usage history exists, the database may block deletion to protect that history.");
   if(!confirmed)return;
   try{
     const {data,error}=await db.from("beverage_stock_items").delete().eq("id",id).select("id");
