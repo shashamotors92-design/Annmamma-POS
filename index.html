@@ -67,16 +67,16 @@
 @media(max-width:560px){.home-screen{padding:24px 12px 36px}.home-card{padding:27px 17px 24px}.home-highlights{grid-template-columns:1fr;gap:9px}.home-highlight{display:flex;gap:12px;align-items:center}.home-highlight .mark{flex:none;margin:0}.home-section-title{text-align:center}}
 
 /* AnnMamma dashboard food-photo menu cards */
-.items{grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:13px}
+.items{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:15px}
 .item{padding:0;overflow:hidden;min-height:0;border:1px solid #e3e7ed;border-radius:15px;background:#fff;box-shadow:0 3px 12px rgba(20,32,52,.07);transition:transform .18s,box-shadow .18s}
 .item:active{transform:scale(.98)}.item:hover{box-shadow:0 7px 20px rgba(20,32,52,.13)}.item .food-photo{transition:transform .25s}.item:hover .food-photo{transform:scale(1.035)}
-.item .food-photo{display:block;width:100%;height:118px;object-fit:cover;background:#eee}.food-placeholder{height:118px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f7eee2,#e7ddd0);color:#78634d;font-size:13px;font-weight:700}
-.item .food-info{display:block;padding:11px 12px 13px}
-.item strong{font-size:14px;line-height:1.35;min-height:36px}
-.item span.food-price{color:#d88722;font-weight:800;margin-top:7px;font-size:15px}
+.item .food-photo{display:block;width:100%;height:155px;object-fit:cover;background:#eee}.food-placeholder{height:155px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f7eee2,#e7ddd0);color:#78634d;font-size:15px;font-weight:700}
+.item .food-info{display:block;padding:13px 14px 15px}
+.item strong{font-size:16px;line-height:1.4;min-height:42px}
+.item span.food-price{color:#d88722;font-weight:800;margin-top:8px;font-size:17px}
 .item:disabled{opacity:.72}
 .item:disabled span.food-price{color:#9b7650}
-@media(max-width:560px){.items{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.item .food-photo{height:105px}.item .food-info{padding:9px}.item strong{font-size:13px;min-height:34px}.item span.food-price{font-size:14px}}
+@media(max-width:560px){.items{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.item .food-photo{height:105px}.food-placeholder{height:105px}.item .food-info{padding:9px}.item strong{font-size:13px;min-height:34px}.item span.food-price{font-size:14px}}
 
 /* Desktop billing layout: scroll only the menu panel; keep Current Order in view */
 @media (min-width:701px){
