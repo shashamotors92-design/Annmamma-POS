@@ -275,7 +275,7 @@ function foodPhotoFor(p){return p.image_url||"";}
 function isDrinkProduct(p){return isDrinkCategoryName(cats.find(c=>c.id===p.category_id)?.name||"");}
 function isPortionCategoryName(name){
   const n=normalizeCategoryName(name).replace(/&/g,"and").replace(/\\s+/g," ").trim();
-  return ["noodles","pasta","fried rice"].includes(n);
+  return ["noodles","pasta","fried rice","kottu"].includes(n);
 }
 function isPortionProduct(p){
   return isPortionCategoryName(cats.find(c=>c.id===p.category_id)?.name||"");
