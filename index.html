@@ -315,7 +315,7 @@ function makeReceipt(no,subtotal,serviceCharge,total,paid,items,receiptDate,tabl
   logo.style.cssText="display:block;width:100%;max-width:130px;height:auto;max-height:55px;object-fit:contain;margin:0 auto 8px;";r.append(logo);
   let heading=document.createElement("div");heading.className="receipt-business-name";heading.textContent="AnnMamma Café & Restaurant";r.append(heading);
   let contact=document.createElement("div");contact.className="receipt-contact";
-  contact.innerHTML="<div class='receipt-phone'>☎ &nbsp;072 818 8885</div><div>📍 &nbsp;01 A, Prethibimbarama Road,</div><div>Kalubowila, Dehiwala 10350</div>";r.append(contact);
+  contact.innerHTML="<div class='receipt-phone'>☎ &nbsp;072 818 8885</div><div>📍 &nbsp;1, Prathibimbarama Road,</div><div>Kalubowila</div>";r.append(contact);
   r.append(document.createElement("hr"));
   let detail=(label,value)=>{let d=document.createElement("div");d.className="rline";let x=document.createElement("span"),y=document.createElement("span");x.textContent=label+":";y.textContent=value||"-";d.append(x,y);r.append(d)};
   detail("Order No",no);detail("Date",new Date(receiptDate).toLocaleString());detail("Customer",staff?.full_name||"Walk-in");
