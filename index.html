@@ -228,7 +228,7 @@ function filterStockHistory(){let from=$("stockHistoryFrom").value,to=$("stockHi
 let beverageItems=[],beverageMovements=[];
 async function loadBeverageStock(){if(staff?.role!=="owner")return;let [a,b]=await Promise.all([db.from("beverage_stock_items").select("id,name,bottle_size,low_stock,is_active").order("name"),db.from("beverage_stock_movements").select("id,beverage_item_id,movement_type,quantity,movement_date,note,created_at").order("movement_date",{ascending:false}).limit(1000)]);if(a.error||b.error){$("bevAddMsg").textContent="Beverage stock setup required: "+(a.error||b.error).message+". Run the Beverage Stock SQL first.";return}beverageItems=a.data||[];beverageMovements=b.data||[];let activeBeverageItems=beverageItems.filter(x=>x.is_active!==false);["bevInItem","bevUseItem"].forEach(id=>$(id).innerHTML=activeBeverageItems.map(x=>`<option value="${x.id}">${x.name}${x.bottle_size?" · "+x.bottle_size:""}</option>`).join(""));$("bevDeleteItem").innerHTML=activeBeverageItems.map(x=>`<option value="${x.id}">${x.name}${x.bottle_size?" · "+x.bottle_size:""}</option>`).join("");$("bevDeleteBtn").disabled=!activeBeverageItems.length;["bevInDate","bevUseDate"].forEach(id=>$(id).value=localDateInput());renderBeverageStock();renderBeverageHistory(beverageMovements);$("bevItemCount").textContent=activeBeverageItems.length;$("bevLowCount").textContent=activeBeverageItems.filter(x=>beverageBalance(x.id)<=Number(x.low_stock||0)).length}
 function beverageBalance(id){return beverageMovements.filter(x=>x.beverage_item_id===id).reduce((n,x)=>n+(x.movement_type==="in"?Number(x.quantity):-Number(x.quantity)),0)}
-function renderBeverageStock(){let body=$("bevRows");body.innerHTML="";beverageItems.filter(x=>x.is_active!==false).forEach(x=>{let ins=beverageMovements.filter(m=>m.beverage_item_id===x.id&&m.movement_type==="in").reduce((n,m)=>n+Number(m.quantity),0),used=beverageMovements.filter(m=>m.beverage_item_id===x.id&&m.movement_type==="use").reduce((n,m)=>n+Number(m.quantity),0),bal=ins-used,tr=document.createElement("tr");tr.className=bal<=Number(x.low_stock||0)?"low-stock-row":"ok-stock-row";[x.name,x.bottle_size||"—",ins,used,bal,Number(x.low_stock||0)].forEach(v=>{let td=document.createElement("td");td.textContent=typeof v==="number"?v.toLocaleString("en-LK"):v;tr.append(td)});let actions=document.createElement("td"),editStock=document.createElement("button"),editDetails=document.createElement("button");editStock.type="button";editStock.textContent="Edit Stock";editStock.onclick=()=>editBeverageCurrentStock(x,bal);editDetails.type="button";editDetails.className="secondary";editDetails.style.marginLeft="5px";editDetails.textContent="Edit Details";editDetails.onclick=()=>editBeverageItem(x);actions.append(editStock,editDetails);tr.append(actions);body.append(tr)})}
+function renderBeverageStock(){let body=$("bevRows");body.innerHTML="";beverageItems.filter(x=>x.is_active!==false).forEach(x=>{let ins=beverageMovements.filter(m=>m.beverage_item_id===x.id&&m.movement_type==="in").reduce((n,m)=>n+Number(m.quantity),0),used=beverageMovements.filter(m=>m.beverage_item_id===x.id&&m.movement_type==="use").reduce((n,m)=>n+Number(m.quantity),0),bal=ins-used,tr=document.createElement("tr");tr.className=bal<=Number(x.low_stock||0)?"low-stock-row":"ok-stock-row";[x.name,x.bottle_size||"—",ins,used,bal,Number(x.low_stock||0)].forEach(v=>{let td=document.createElement("td");td.textContent=typeof v==="number"?v.toLocaleString("en-LK"):v;tr.append(td)});let actions=document.createElement("td"),editStock=document.createElement("button"),editUsed=document.createElement("button"),editDetails=document.createElement("button");editStock.type="button";editStock.textContent="Edit Stock";editStock.onclick=()=>editBeverageCurrentStock(x,bal);editUsed.type="button";editUsed.className="secondary";editUsed.style.marginLeft="5px";editUsed.textContent="Edit Used";editUsed.onclick=()=>editBeverageUsedStock(x,used,bal);editDetails.type="button";editDetails.className="secondary";editDetails.style.marginLeft="5px";editDetails.textContent="Edit Details";editDetails.onclick=()=>editBeverageItem(x);actions.append(editStock,editUsed,editDetails);tr.append(actions);body.append(tr)})}
 function renderBeverageHistory(rows){let body=$("bevHistoryRows");body.innerHTML="";rows.forEach(m=>{let x=beverageItems.find(i=>i.id===m.beverage_item_id),tr=document.createElement("tr");[m.movement_date,x?.name||"Unknown",m.movement_type==="in"?"Stock In":"Daily Usage",m.quantity+" bottles/cans",m.note||"—"].forEach(v=>{let td=document.createElement("td");td.textContent=v;tr.append(td)});let action=document.createElement("td"),edit=document.createElement("button"),del=document.createElement("button");edit.type="button";edit.className="secondary";edit.textContent="Edit";edit.onclick=()=>editBeverageMovement(m);del.type="button";del.style.background="#a52828";del.style.marginLeft="5px";del.textContent="Delete";del.onclick=()=>deleteBeverageMovement(m);action.append(edit,del);tr.append(action);body.append(tr)})}
 
 async function deleteConfirmedWrongGingerEntries(){
@@ -262,6 +262,25 @@ async function editBeverageCurrentStock(item,currentBalance){
   if(error){alert("Could not update current stock: "+error.message);return}
   await loadBeverageStock();
   alert("Current stock updated to "+target+" bottles/cans.");
+}
+
+async function editBeverageUsedStock(item,currentUsed,currentBalance){
+  if(staff?.role!=="owner"){alert("Owner access only.");return}
+  const entered=prompt("Enter the correct TOTAL USED quantity for "+item.name+" (whole bottles/cans):",String(currentUsed));
+  if(entered===null)return;
+  const target=Number(entered);
+  if(!Number.isInteger(target)||target<0){alert("Enter a whole number zero or greater.");return}
+  const delta=target-currentUsed;
+  if(delta===0){alert("No Used stock change was made.");return}
+  if(delta>currentBalance){alert("Used quantity cannot be increased by "+delta+" because only "+currentBalance+" bottles/cans remain.");return}
+  const direction=delta>0?"use":"in",qty=Math.abs(delta);
+  const note=delta>0?"Manual used stock correction (increase)":"Manual used stock correction (decrease)";
+  if(!confirm("Update "+item.name+" total Used from "+currentUsed+" to "+target+" bottles/cans?\n\nA "+(direction==="use"?"Daily Usage":"Stock In")+" adjustment of "+qty+" will be recorded in Beverage Stock History."))return;
+  const {data,error}=await db.from("beverage_stock_movements").insert({beverage_item_id:item.id,movement_type:direction,quantity:qty,movement_date:localDateInput(),note,created_by:user.id}).select("id");
+  if(error){alert("Could not update Used stock: "+error.message);return}
+  if(!data||!data.length){alert("No adjustment was saved. Check Supabase INSERT permissions.");return}
+  await loadBeverageStock();
+  alert("Used stock updated to "+target+" bottles/cans. The adjustment is recorded in Stock History.");
 }
 
 async function editBeverageItem(item){
