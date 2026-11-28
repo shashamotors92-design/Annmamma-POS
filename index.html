@@ -436,6 +436,38 @@ async function startAddToOrder(o,btn){
 }
 function cancelOrderEdit(){editingOrder=null;cart=[];$("paid").value="";$("paid").placeholder="Amount received";$("table").value="";$("currentOrderHeading").textContent="Current Order";$("editOrderNotice").classList.add("hidden");$("cancelOrderEdit").classList.add("hidden");$("checkout").textContent="Complete Sale & Print";renderCart()}
 
+async function recordAutoBeverageUsage(items,orderNo){
+  const drinkLines=items.filter(x=>isDrinkProduct(products.find(p=>p.id===x.id)));
+  if(!drinkLines.length)return "";
+  const [{data:stockItems,error:stockError},{data:movements,error:movementError}]=await Promise.all([
+    db.from("beverage_stock_items").select("id,name,bottle_size,is_active"),
+    db.from("beverage_stock_movements").select("beverage_item_id,movement_type,quantity").limit(5000)
+  ]);
+  if(stockError||movementError)return "Beverage stock was not updated: "+(stockError||movementError).message;
+  const active=(stockItems||[]).filter(x=>x.is_active!==false);
+  const norm=v=>String(v||"").toLowerCase().replace(/\b(\d+(?:\.\d+)?)\s*(ml|l)\b/g," ").replace(/[^a-z0-9]/g,"");
+  const sizeOf=v=>{const m=String(v||"").toLowerCase().match(/(\d+(?:\.\d+)?)\s*(ml|l)\b/);return m?m[1]+m[2]:""};
+  const stockBalance=id=>(movements||[]).filter(m=>m.beverage_item_id===id).reduce((n,m)=>n+(m.movement_type==="in"?Number(m.quantity):-Number(m.quantity)),0);
+  const grouped=new Map();
+  const unmatched=[];
+  for(const line of drinkLines){
+    const base=norm(line.name),size=sizeOf(line.name);
+    let candidates=active.filter(x=>norm(x.name)===base);
+    if(size)candidates=candidates.filter(x=>sizeOf(x.bottle_size)===size);
+    if(!candidates.length&&!size){const byName=active.filter(x=>norm(x.name)===base);if(byName.length===1)candidates=byName;}
+    if(candidates.length!==1){unmatched.push(line.name+(size?" "+size:""));continue;}
+    const item=candidates[0];grouped.set(item.id,{item,qty:(grouped.get(item.id)?.qty||0)+Number(line.qty||0)});
+  }
+  const rows=[];
+  for(const {item,qty} of grouped.values()){
+    const available=stockBalance(item.id);
+    if(qty>available){unmatched.push(item.name+" (available "+available+", sold "+qty+")");continue;}
+    rows.push({beverage_item_id:item.id,movement_type:"use",quantity:qty,movement_date:localDateInput(),note:"Automatic sale usage · Order "+orderNo,created_by:user.id});
+  }
+  if(rows.length){const {error}=await db.from("beverage_stock_movements").insert(rows);if(error)return "Bill saved, but Beverage Used Stock could not be updated: "+error.message;}
+  return unmatched.length?"Beverage stock needs attention for: "+unmatched.join(", ")+". Check beverage name / bottle size and available stock.":"";
+}
+
 function renderReports(){let today=orders.filter(o=>new Date(o.created_at).toDateString()===new Date().toDateString()&&o.status==="completed");$("count").textContent=today.length;$("sales").textContent=money(today.reduce((s,o)=>s+Number(o.total),0))}
 async function loadPastSummary(){let from=$("pastFrom").value,to=$("pastTo").value;if(!from||!to){$("pastMsg").textContent="Please select both dates.";return}if(from>to){$("pastMsg").textContent="From date must be before or equal to To date.";return}$("loadPastSummary").disabled=true;$("pastMsg").textContent="Loading past sales...";$("pastItemRows").innerHTML="";$("pastOrderRows").innerHTML="";try{let end=new Date(to+"T00:00:00");end.setDate(end.getDate()+1);let {data:past,error}=await db.from("orders").select("id,order_no,total,order_type,created_at,status").eq("status","completed").gte("created_at",new Date(from+"T00:00:00").toISOString()).lt("created_at",end.toISOString()).order("created_at",{ascending:false});if(error)throw error;past=past||[];$("pastOrderCount").textContent=past.length;$("pastSalesTotal").textContent=money(past.reduce((sum,o)=>sum+Number(o.total||0),0));if(past.length){let ids=past.map(o=>o.id);let {data:lines,error:lineError}=await db.from("order_items").select("item_name,quantity,line_total").in("order_id",ids);if(lineError)throw lineError;let grouped={};(lines||[]).forEach(x=>{let k=x.item_name||"Unknown item";if(!grouped[k])grouped[k]={qty:0,sales:0};grouped[k].qty+=Number(x.quantity||0);grouped[k].sales+=Number(x.line_total||0)});Object.entries(grouped).sort((a,b)=>b[1].qty-a[1].qty).forEach(([name,v])=>{let tr=document.createElement("tr");[name,String(v.qty),money(v.sales)].forEach(val=>{let td=document.createElement("td");td.textContent=val;tr.append(td)});$("pastItemRows").append(tr)})}past.forEach(o=>{let tr=document.createElement("tr");[o.order_no,new Date(o.created_at).toLocaleString(),money(o.total),o.order_type].forEach(val=>{let td=document.createElement("td");td.textContent=val;tr.append(td)});$("pastOrderRows").append(tr)});$("pastMsg").textContent="Showing "+from+" to "+to+" · "+past.length+" completed orders."}catch(e){$("pastMsg").textContent="Could not load past summary: "+e.message}finally{$("loadPastSummary").disabled=false}}
 async function printReceipt(){
@@ -461,7 +493,7 @@ async function checkout(){
   if(paid<total){alert(editingOrder?"Additional amount paid must cover the added items and their service charge.":"Amount paid must cover the total including service charge.");return}
   $("checkout").disabled=true;
   try{
-    let receiptItems,receiptNo,receiptSubtotal,receiptService,receiptTotal,receiptPaid,receiptDate,receiptTable;
+    let receiptItems,receiptNo,receiptSubtotal,receiptService,receiptTotal,receiptPaid,receiptDate,receiptTable,beverageStockWarning="";
     if(editingOrder){
       const {data:current,error:fetchError}=await db.from("orders").select("id,order_no,subtotal,total,amount_paid,order_type,status,created_at,table_label").eq("id",editingOrder.id).single();
       if(fetchError)throw fetchError;if(current.status!=="completed")throw new Error("This bill is no longer marked completed. Refresh Orders and try again.");
@@ -471,16 +503,18 @@ async function checkout(){
       const newSubtotal=Number(current.subtotal||0)+subtotal,newTotal=Number(current.total||0)+total,newPaid=Number(current.amount_paid||0)+paid;
       const {error:updateError}=await db.from("orders").update({subtotal:newSubtotal,total:newTotal,amount_paid:newPaid,table_label:$("table").value.trim()||current.table_label||null}).eq("id",current.id);
       if(updateError){if(inserted?.length)await db.from("order_items").delete().in("id",inserted.map(x=>x.id));throw updateError;}
+      beverageStockWarning=await recordAutoBeverageUsage(cart,current.order_no);
       const {data:allItems,error:itemsError}=await db.from("order_items").select("item_name,quantity,unit_price,line_total").eq("order_id",current.id);if(itemsError)throw itemsError;
       receiptItems=(allItems||[]).map(x=>({name:x.item_name,qty:Number(x.quantity),price:Number(x.unit_price)}));
       receiptNo=current.order_no;receiptSubtotal=newSubtotal;receiptService=current.order_type==="dine_in"?newTotal-newSubtotal:0;receiptTotal=newTotal;receiptPaid=newPaid;receiptDate=current.created_at;receiptTable=$("table").value.trim()||current.table_label||"";
     }else{
       let no="AM-"+Date.now().toString().slice(-8);let {data:o,error}=await db.from("orders").insert({order_no:no,created_by:user.id,order_type:$("type").value,table_label:$("table").value.trim()||null,subtotal,discount:0,total,payment_method:$("payment").value,amount_paid:paid,status:"completed"}).select().single();if(error)throw error;
       let rows=cart.map(x=>({order_id:o.id,product_id:x.id,item_name:x.name+(x.portionSize?" ("+x.portionSize+")":""),quantity:x.qty,unit_price:x.price,line_total:x.price*x.qty}));let {error:e}=await db.from("order_items").insert(rows);if(e)throw e;
+      beverageStockWarning=await recordAutoBeverageUsage(cart,no);
       receiptNo=no;receiptSubtotal=subtotal;receiptService=serviceCharge;receiptTotal=total;receiptPaid=paid;receiptItems=cart.map(x=>({...x,name:x.name+(x.portionSize?" ("+x.portionSize+")":"")}));receiptDate=new Date();receiptTable=$("table").value.trim();
     }
     makeReceipt(receiptNo,receiptSubtotal,receiptService,receiptTotal,receiptPaid,receiptItems,receiptDate,receiptTable);
-    cart=[];$("paid").value="";renderCart();if(editingOrder)cancelOrderEdit();else $("table").value="";await load();await printReceipt();
+    cart=[];$("paid").value="";renderCart();if(editingOrder)cancelOrderEdit();else $("table").value="";await load();await printReceipt();if(beverageStockWarning)alert(beverageStockWarning);
   }catch(e){alert("Could not save sale: "+e.message)}finally{$("checkout").disabled=false}
 }
 function makeReceipt(no,subtotal,serviceCharge,total,paid,items,receiptDate,tableLabel=""){
